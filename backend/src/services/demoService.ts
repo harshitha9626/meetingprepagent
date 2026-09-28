@@ -1,59 +1,171 @@
-// AI-Generated Code - 2026-09-28 - Composer
+// AI-Generated Code - 2026-09-29 - Composer
 
-import {
-  buildSeedRetainItems,
-  demoContact,
-  demoMeetings,
-} from "../demo/seedData.js";
+import { buildSeedRetainItems, buildDemoForUser } from "../demo/seedData.js";
 import {
   createContact,
   createMeeting,
   getContact,
-  replaceData,
+  listMeetings,
   resetAppData,
+  updateMeeting,
 } from "../store/db.js";
-import { clearProviderMemories, retainMemory } from "./hindsightService.js";
+import {
+  patchMemoryDebug,
+  retainMemory,
+  getBankId,
+  isHindsightConfigured,
+} from "./hindsightService.js";
 
-export async function seedDemo() {
-  resetAppData();
-  await clearProviderMemories();
+/**
+ * Seeds Ravi + meetings into SQLite for the authenticated user only.
+ * Then attempts Hindsight retain into that user's bank.
+ */
+export async function seedDemo(userId: string) {
+  resetAppData(userId);
 
-  createContact(demoContact);
-  for (const meeting of demoMeetings) {
+  const { contact: seedContact, meetings: seedMeetings } =
+    buildDemoForUser(userId);
+  createContact({ ...seedContact, userId });
+  for (const meeting of seedMeetings) {
     createMeeting(meeting);
   }
 
-  const { items } = buildSeedRetainItems();
-  const retained = [];
-  for (const item of items) {
-    const result = await retainMemory({
-      documentId: item.documentId,
-      content: item.content,
-      contactId: demoContact.id,
-      meetingId: item.meeting.id,
-      context: `Seed debrief — ${item.meeting.title}`,
-      timestamp: `${item.meeting.date}T18:00:00.000Z`,
-      tags: [`contact:${demoContact.id}`, "type:meeting-debrief", "demo:seed"],
+  const contact = getContact(seedContact.id, userId)!;
+  const meetings = listMeetings(seedContact.id);
+  const { items } = buildSeedRetainItems(userId);
+  const retained: {
+    meetingId: string;
+    documentId: string;
+    provider: string;
+  }[] = [];
+  const documentIds: string[] = [];
+  const bankId = getBankId(userId);
+
+  patchMemoryDebug({
+    bankId,
+    contactId: seedContact.id,
+    contactName: seedContact.name,
+    retain: {
+      status: "ok",
+      documentIds: [],
+      at: new Date().toISOString(),
+    },
+  });
+
+  if (!isHindsightConfigured()) {
+    const message =
+      "Hindsight is not configured. Add HINDSIGHT_API_KEY to backend/.env and restart the API.";
+    patchMemoryDebug({
+      retain: {
+        status: "error",
+        documentIds: [],
+        error: message,
+        at: new Date().toISOString(),
+      },
     });
-    retained.push({
-      meetingId: item.meeting.id,
-      documentId: item.documentId,
-      provider: result.provider,
-    });
+    return {
+      contact,
+      meetings,
+      retained,
+      hindsightConfigured: false,
+      hindsightError: message,
+      debug: {
+        bankId,
+        contactId: seedContact.id,
+        retainCount: 0,
+        documentIds: [],
+      },
+      message:
+        "Ravi Sharma demo data loaded locally. Hindsight retain skipped — configure HINDSIGHT_API_KEY to retain and recall.",
+    };
   }
 
+  try {
+    for (const item of items) {
+      const result = await retainMemory({
+        documentId: item.documentId,
+        content: item.content,
+        contactId: seedContact.id,
+        meetingId: item.meeting.id,
+        context: `Seed debrief — ${item.meeting.title}`,
+        timestamp: `${item.meeting.date}T18:00:00.000Z`,
+        tags: [
+          `contact:${seedContact.id}`,
+          `user:${userId}`,
+          "type:meeting-debrief",
+          "demo:seed",
+        ],
+      });
+      documentIds.push(result.documentId);
+      updateMeeting(item.meeting.id, {
+        hindsightDocumentId: result.documentId,
+      });
+      retained.push({
+        meetingId: item.meeting.id,
+        documentId: result.documentId,
+        provider: result.provider,
+      });
+    }
+  } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    patchMemoryDebug({
+      bankId,
+      contactId: seedContact.id,
+      contactName: seedContact.name,
+      retain: {
+        status: "error",
+        documentIds,
+        error: errMessage,
+        at: new Date().toISOString(),
+      },
+    });
+    return {
+      contact: getContact(seedContact.id, userId)!,
+      meetings: listMeetings(seedContact.id),
+      retained,
+      hindsightConfigured: true,
+      hindsightError: errMessage,
+      debug: {
+        bankId,
+        contactId: seedContact.id,
+        retainCount: retained.length,
+        documentIds,
+      },
+      message: `Ravi Sharma demo data loaded locally (${retained.length}/${items.length} retained in Hindsight). Retain error: ${errMessage}`,
+    };
+  }
+
+  patchMemoryDebug({
+    bankId,
+    contactId: seedContact.id,
+    contactName: seedContact.name,
+    retain: {
+      status: "ok",
+      documentIds,
+      at: new Date().toISOString(),
+    },
+  });
+
   return {
-    contact: getContact(demoContact.id),
-    meetings: demoMeetings,
+    contact: getContact(seedContact.id, userId)!,
+    meetings: listMeetings(seedContact.id),
     retained,
-    message:
-      "Demo seeded: Priya Shah @ Acme with 2 logged meetings + 1 upcoming. Memory retained for Meeting 1 and 2.",
+    hindsightConfigured: true,
+    debug: {
+      bankId,
+      contactId: seedContact.id,
+      retainCount: retained.length,
+      documentIds,
+    },
+    message: `Demo seeded: Ravi Sharma — ${retained.length} meetings retained in Hindsight (cost, architecture doc, timeline). Upcoming meeting ready to prepare.`,
   };
 }
 
-export async function resetDemo() {
-  resetAppData();
-  await clearProviderMemories();
-  replaceData({ contacts: [], meetings: [], localMemories: [] });
-  return { ok: true, message: "Demo data cleared. Run seed to reload Priya story." };
+export async function resetDemo(userId: string) {
+  resetAppData(userId);
+  return {
+    ok: true,
+    message:
+      "Your local Briefed data was cleared. Hindsight memories for your account remain; re-seed upserts the same document ids in your bank.",
+  };
 }

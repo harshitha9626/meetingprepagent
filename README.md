@@ -2,84 +2,111 @@
 
 Meeting Prep Agent for the **Hindsight Hackathon**.
 
-> Walk into every customer meeting knowing what you promised, what’s still open, and what they care about — because the agent remembers.
+> Walk into every customer meeting knowing what you promised, what’s still open, and what they care about — because Hindsight remembers.
 
-## What it is
+## Architecture
 
-**Briefed** helps a B2B AE (Maya) prepare for meetings by retaining debriefs into **Hindsight** and recalling them into a personalized **Meeting Brief**.
+| Layer | Role |
+|-------|------|
+| **Hindsight** | Sole long-term memory (retain / recall). No mock memory. |
+| **SQLite** (`backend/data/briefed.sqlite`) | Contacts + meetings metadata only |
+| **Groq** (optional) | Meeting Brief prose composition |
+| **React UI** | Prep, debrief, Memory Used, with/without memory compare |
 
-Core loop:
-
-`Debrief → Hindsight retain → Prepare → Hindsight recall → Personalized brief + “What I Remember”`
-
-## Stack
-
-- Frontend: React + TypeScript + Vite + Tailwind
-- Backend: Node.js + TypeScript + Express
-- Memory: Hindsight (`@vectorize-io/hindsight-client`)
-- LLM (optional): Groq for brief composition
-- Local fallback memory when `MEMORY_PROVIDER=local` (offline demo)
+Core loop: `Debrief → Hindsight retain → Prepare → Hindsight recall → Personalized brief`
 
 ## Setup
 
-### 1. Backend
+1. Get a Hindsight Cloud API key from [ui.hindsight.vectorize.io](https://ui.hindsight.vectorize.io).
+2. Configure backend env:
 
 ```bash
 cd backend
 cp .env.example .env
-npm install
-npm run dev
+# edit .env — set HINDSIGHT_API_KEY (required)
 ```
 
-API: `http://localhost:8787`
-
-### 2. Frontend
+3. Install & run:
 
 ```bash
-cd frontend
+# from repo root
 npm install
+npm --prefix backend install
+npm --prefix frontend install
 npm run dev
 ```
 
-UI: `http://localhost:5173`
+- API: http://localhost:8787  
+- UI: http://localhost:5173  
 
-### 3. Environment
+API keys stay on the server only — never in the Vite bundle.
 
-In `backend/.env`:
+## Environment variables
 
-| Variable | Purpose |
-|----------|---------|
-| `HINDSIGHT_API_KEY` | Hindsight Cloud API key |
-| `HINDSIGHT_BASE_URL` | Default `https://api.hindsight.vectorize.io` |
-| `HINDSIGHT_BANK_ID` | Default `briefed-maya` |
-| `MEMORY_PROVIDER` | `hindsight` or `local` |
-| `GROQ_API_KEY` | Optional; improves brief writing |
-| `GROQ_MODEL` | Default `llama-3.3-70b-versatile` |
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `HINDSIGHT_API_KEY` | **Yes** | Hindsight Cloud auth |
+| `HINDSIGHT_BASE_URL` | No | Default `https://api.hindsight.vectorize.io` |
+| `HINDSIGHT_BANK_ID` | No | Default `briefed-maya` |
+| `GROQ_API_KEY` | No | Better brief writing |
+| `GROQ_MODEL` | No | Default `llama-3.3-70b-versatile` |
+| `PORT` | No | Default `8787` |
 
-For the hackathon demo, set real Hindsight credentials and `MEMORY_PROVIDER=hindsight` (or leave unset when `HINDSIGHT_API_KEY` is present).
+## Judge demo (2–3 min)
 
-## Demo flow (2–3 min)
+1. Ensure `HINDSIGHT_API_KEY` is set; restart API.
+2. Open http://localhost:5173
+3. Click **Start Ravi demo** — creates Ravi + retains 3 meetings in Hindsight (banner: remembered).
+4. Show **Relationship timeline** growing + **Relationship Memory** sidebar.
+5. Click **Prepare My Meeting** — loading: “Recalling relationship memory…”
+6. Show **MEETING BRIEF**, **MEMORY USED**, and **Without memory vs With Hindsight** (WITH side is real recall).
+7. Point at the memory flow strip: Interaction → Retain → Long-term Memory → Recall → Brief.
 
-1. Click **Load Priya demo** — seeds Priya Shah @ Acme with Meeting 1 + 2 retained.
-2. Select Priya → **Prepare with memory** — show commitments, missed ROI one-pager, SOC2 / IT concerns.
-3. Point to **What I Remember** (fact + why relevant).
-4. Toggle **Without memory** — generic discovery brief.
-5. Toggle **With memory** — personalized brief again.
-6. Optional: open upcoming meeting → log a new debrief → prepare again to show improvement.
+## Test the Hindsight memory flow
 
-## API
+```bash
+# health
+curl http://localhost:8787/api/health
 
-- `GET /api/health`
-- `GET/POST /api/contacts`
-- `GET /api/contacts/:id`
-- `POST /api/contacts/:id/meetings`
-- `POST /api/contacts/:id/prepare` `{ "mode": "memory" | "generic" }`
-- `POST /api/meetings/:id/debrief`
-- `POST /api/demo/seed`
-- `POST /api/demo/reset`
+# seed (retain Meeting 1 + 2)
+curl -X POST http://localhost:8787/api/demo/seed
 
-## Product notes
+# personalized prepare (recall)
+curl -X POST http://localhost:8787/api/contacts/contact-ravi-sharma/prepare \
+  -H "Content-Type: application/json" -d "{\"mode\":\"memory\"}"
 
-- Persona: Maya (B2B AE)
-- Contact story: Priya Shah, VP Ops, Acme Corp
-- Not a summarizer chatbot — value is long-term relationship memory via Hindsight
+# generic compare
+curl -X POST http://localhost:8787/api/contacts/contact-ravi-sharma/prepare \
+  -H "Content-Type: application/json" -d "{\"mode\":\"generic\"}"
+```
+
+Or in the UI: create/log a debrief → retain → prepare → confirm recalled commitments appear.
+
+## SQLite schema
+
+- `contacts(id, name, company, role, email, notes, created_at)`
+- `meetings(id, contact_id, title, date, status, debrief_json, hindsight_document_id, created_at)`
+
+## Judge materials
+
+| Doc | Purpose |
+|-----|---------|
+| [ARTICLE.md](./ARTICLE.md) | Technical article (content submission) |
+| [SOCIAL_POST.md](./SOCIAL_POST.md) | Short technical social post |
+| [VIDEO_SCRIPT.md](./VIDEO_SCRIPT.md) | 2–5 min demo video script |
+| [THUMBNAIL_TEXT.md](./THUMBNAIL_TEXT.md) | Thumbnail titles + visual concept |
+| [FINAL_SUBMISSION.md](./FINAL_SUBMISSION.md) | Final submission summary |
+| [README_FINAL.md](./README_FINAL.md) | Final submission README |
+| [SUBMISSION_DESCRIPTION.md](./SUBMISSION_DESCRIPTION.md) | Concise product description |
+| [HINDSIGHT_INTEGRATION.md](./HINDSIGHT_INTEGRATION.md) | Exact retain/recall implementation map |
+| [DEMO_DATA.md](./DEMO_DATA.md) | Ravi Sharma seeded scenario |
+| [FINAL_SUBMISSION_CHECKLIST.md](./FINAL_SUBMISSION_CHECKLIST.md) | Submission gate checklist |
+| [FINAL_PITCH.md](./FINAL_PITCH.md) | 30s / 60s pitches + problem–solution framing |
+| [LIVE_DEMO_SCRIPT.md](./LIVE_DEMO_SCRIPT.md) | Exact timed 2-minute demo with real UI labels |
+| [JUDGE_QUESTIONS.md](./JUDGE_QUESTIONS.md) | Q1–Q15 short technical answers |
+| [ARCHITECTURE_EXPLANATION.md](./ARCHITECTURE_EXPLANATION.md) | Judge-friendly architecture walkthrough |
+| [DEMO_BACKUP_PLAN.md](./DEMO_BACKUP_PLAN.md) | What to do if Hindsight/LLM/demo fails (no fakes) |
+| [DEMO_SCRIPT.md](./DEMO_SCRIPT.md) | Alternate demo script + elevator pitch |
+| [JUDGE_QA.md](./JUDGE_QA.md) | Concise Q&A (shorter set) |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Implementation-mapped architecture |
+| [FINAL_CHECKLIST.md](./FINAL_CHECKLIST.md) | Pre-demo verification checklist |

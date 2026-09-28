@@ -1,4 +1,4 @@
-// AI-Generated Code - 2026-09-28 - Composer
+// AI-Generated Code - 2026-09-29 - Composer
 
 export function MemoryToggle({
   mode,
@@ -10,26 +10,30 @@ export function MemoryToggle({
   disabled?: boolean;
 }) {
   return (
-    <div className="inline-flex rounded-full border border-[#1f6b56]/25 bg-white/70 p-1">
+    <div
+      className="inline-flex max-w-full flex-wrap rounded-full border border-[#1f6b56]/25 bg-white/70 p-1"
+      role="group"
+      aria-label="Memory comparison mode"
+    >
       <button
         type="button"
         disabled={disabled}
         onClick={() => onChange("memory")}
-        className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+        className={`btn-interactive rounded-full px-4 py-1.5 text-xs font-semibold ${
           mode === "memory"
-            ? "bg-[#1f6b56] text-white"
+            ? "bg-[#1f6b56] text-white shadow-sm"
             : "text-[#2a4038] hover:text-[#10241f]"
         }`}
       >
-        With memory
+        With Hindsight
       </button>
       <button
         type="button"
         disabled={disabled}
         onClick={() => onChange("generic")}
-        className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+        className={`btn-interactive rounded-full px-4 py-1.5 text-xs font-semibold ${
           mode === "generic"
-            ? "bg-[#2a4038] text-white"
+            ? "bg-[#2a4038] text-white shadow-sm"
             : "text-[#2a4038] hover:text-[#10241f]"
         }`}
       >

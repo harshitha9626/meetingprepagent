@@ -38,7 +38,7 @@ export function WhatIRemember({
           </h2>
         </div>
         <span className="memory-pulse rounded-full bg-[#f0d7a8] px-2.5 py-1 text-[11px] font-semibold text-[#10241f]">
-          {provider}
+          {provider === "hindsight" ? "hindsight" : "local demo"}
         </span>
       </div>
 
@@ -56,9 +56,9 @@ export function WhatIRemember({
         </div>
       ) : (
         <ul className="space-y-3 overflow-auto pr-1">
-          {memories.map((memory) => (
+          {memories.map((memory, index) => (
             <li
-              key={memory.id}
+              key={`${memory.id}-${index}`}
               className="rounded-2xl border border-[#1f6b56]/15 bg-white/70 p-4 shadow-[0_10px_30px_rgba(16,36,31,0.04)]"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
