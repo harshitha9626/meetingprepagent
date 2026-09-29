@@ -30,10 +30,12 @@ export type AuthTokenPayload = {
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET?.trim();
   if (!secret || secret.length < 16) {
-    // Dev-friendly fallback; production must set JWT_SECRET in .env
-    if (process.env.NODE_ENV === "production") {
+    // Dev-friendly fallback; production / Vercel must set JWT_SECRET
+    if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
       throw Object.assign(
-        new Error("JWT_SECRET must be set (min 16 characters) in production."),
+        new Error(
+          "JWT_SECRET must be set (min 16 characters) in the Vercel/project environment."
+        ),
         { status: 500, code: "AUTH_MISCONFIGURED" }
       );
     }

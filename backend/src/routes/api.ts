@@ -8,7 +8,9 @@ import {
   createMeeting,
   getCommitmentForUser,
   getContact,
+  getDbPath,
   getMeetingForUser,
+  initDatabase,
   listCommitments,
   listContacts,
   listMeetings,
@@ -111,14 +113,32 @@ router.use("/auth", authRouter);
 
 router.get("/health", (_req, res) => {
   const hs = healthCheck();
+  let sqliteOk = false;
+  let sqliteError: string | undefined;
+  try {
+    initDatabase();
+    sqliteOk = true;
+  } catch (err) {
+    sqliteError = err instanceof Error ? err.message : String(err);
+  }
   res.json({
-    ok: true,
+    ok: sqliteOk,
     service: "briefed-api",
     memoryProvider: "hindsight",
     hindsightConfigured: hs.configured,
     bankId: hs.bankId,
-    videoSignaling: "/ws/video",
+    videoSignaling: process.env.VERCEL
+      ? "unavailable-on-vercel-serverless"
+      : "/ws/video",
     auth: true,
+    runtime: process.env.VERCEL ? "vercel" : "local",
+    sqlite: {
+      ok: sqliteOk,
+      path: getDbPath(),
+      error: sqliteError,
+      ephemeral: Boolean(process.env.VERCEL),
+    },
+    jwtConfigured: Boolean(process.env.JWT_SECRET?.trim()),
   });
 });
 

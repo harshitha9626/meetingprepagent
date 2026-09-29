@@ -4,6 +4,9 @@
   "description": "Briefed — Meeting Prep Agent API powered by Hindsight",
   "main": "dist/index.js",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

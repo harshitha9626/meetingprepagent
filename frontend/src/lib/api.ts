@@ -260,7 +260,7 @@ async function request<T>(
     error?: string;
     code?: string;
   };
-  if (!res.ok) {
+      if (!res.ok) {
     if (res.status === 401 && needsAuth) {
       clearSession();
       window.dispatchEvent(new CustomEvent("briefed:auth-expired"));
@@ -269,7 +269,11 @@ async function request<T>(
       data.error ||
       (data.code === "HINDSIGHT_NOT_CONFIGURED"
         ? "Hindsight is not configured. Add HINDSIGHT_API_KEY to backend/.env and restart the API."
-        : `Request failed (${res.status})`);
+        : data.code === "AUTH_MISCONFIGURED"
+          ? "Server auth is misconfigured. Set JWT_SECRET in Vercel environment variables."
+          : res.status === 500
+            ? "Server error (500). If this is Vercel, check /api/health and that JWT_SECRET is set, then redeploy."
+            : `Request failed (${res.status})`);
     const err = new Error(message);
     (err as Error & { code?: string; status?: number }).code = data.code;
     (err as Error & { status?: number }).status = res.status;

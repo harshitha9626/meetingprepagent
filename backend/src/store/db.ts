@@ -23,8 +23,36 @@ import type {
 } from "../types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "..", "data");
-const DB_PATH = path.join(DATA_DIR, "briefed.sqlite");
+
+/** True on Vercel / Lambda — only /tmp is reliably writable. */
+export function isServerlessRuntime(): boolean {
+  return Boolean(
+    process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.BRIEFED_FORCE_TMP_DB === "1"
+  );
+}
+
+/**
+ * Resolve SQLite directory.
+ * - Local: backend/data (persistent)
+ * - Vercel: /tmp/briefed-data (ephemeral per instance — hackathon limitation)
+ * - Override: BRIEFED_DB_DIR
+ */
+export function resolveDataDir(): string {
+  const override = process.env.BRIEFED_DB_DIR?.trim();
+  if (override) return override;
+  if (isServerlessRuntime()) return "/tmp/briefed-data";
+  return path.join(__dirname, "..", "..", "data");
+}
+
+function getDataDir(): string {
+  return resolveDataDir();
+}
+
+function getSqlitePath(): string {
+  return path.join(getDataDir(), "briefed.sqlite");
+}
 
 /** Pre-auth orphan rows keep data; never returned to logged-in users. */
 export const ORPHAN_USER_ID = "orphan-pre-auth";
@@ -72,12 +100,16 @@ function migrateSchema(database: DatabaseSync): void {
 
 function getDb(): DatabaseSync {
   if (db) return db;
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  const dataDir = getDataDir();
+  const dbPath = getSqlitePath();
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
   }
-  db = new DatabaseSync(DB_PATH);
+  db = new DatabaseSync(dbPath);
+  // WAL needs companion files; DELETE is safer on ephemeral /tmp serverless disks.
+  const journalMode = isServerlessRuntime() ? "DELETE" : "WAL";
   db.exec(`
-    PRAGMA journal_mode = WAL;
+    PRAGMA journal_mode = ${journalMode};
     PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS users (
@@ -409,7 +441,7 @@ export function resetAppData(userId: string): void {
 }
 
 export function getDbPath(): string {
-  return DB_PATH;
+  return getSqlitePath();
 }
 
 function todayIsoDate(): string {
