@@ -1,7 +1,7 @@
 ﻿{
   "name": "briefed-api",
   "version": "1.0.0",
-  "description": "Briefed â€” Meeting Prep Agent API powered by Hindsight",
+  "description": "Briefed - Meeting Prep Agent API powered by Hindsight",
   "main": "dist/index.js",
   "type": "module",
   "engines": {
@@ -42,4 +42,3 @@
     "typescript": "^5.9.2"
   }
 }
-
