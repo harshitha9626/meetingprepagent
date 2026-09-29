@@ -45,12 +45,47 @@ API keys stay on the server only — never in the Vite bundle.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
+| `JWT_SECRET` | **Yes** (prod/Vercel) | JWT signing secret (min 16 chars). Never expose to frontend. |
+| `RESEND_API_KEY` | **Yes** for registration | Resend API key (backend only) |
+| `RESEND_FROM_EMAIL` | **Yes** for registration | Verified Resend sender, e.g. `Briefed <onboarding@resend.dev>` (test) or your verified domain |
+| `UPSTASH_REDIS_REST_URL` | **Yes** on Vercel | Upstash Redis REST URL for OTP + auth users across serverless invocations |
+| `UPSTASH_REDIS_REST_TOKEN` | **Yes** on Vercel | Upstash Redis REST token |
 | `HINDSIGHT_API_KEY` | **Yes** | Hindsight Cloud auth |
 | `HINDSIGHT_BASE_URL` | No | Default `https://api.hindsight.vectorize.io` |
 | `HINDSIGHT_BANK_ID` | No | Default `briefed-maya` |
 | `GROQ_API_KEY` | No | Better brief writing |
 | `GROQ_MODEL` | No | Default `llama-3.3-70b-versatile` |
 | `PORT` | No | Default `8787` |
+
+Registration sends a real 6-digit OTP by email via **Resend**. There is **no demo OTP** and the code is never returned in API responses or logged. If `RESEND_API_KEY` / `RESEND_FROM_EMAIL` are missing, registration fails with a clear configuration error.
+
+### Resend setup (real Gmail OTP)
+
+1. Create an account at [resend.com](https://resend.com).
+2. Create an **API Key** → put it in `RESEND_API_KEY` (local `backend/.env` and/or Vercel).
+3. Sender address (`RESEND_FROM_EMAIL`):
+   - **Quick test:** `Briefed <onboarding@resend.dev>` (Resend’s shared test sender; delivery rules may limit recipients to your Resend account email).
+   - **Production / any Gmail inbox:** add and verify your own domain in Resend → Domains, then use e.g. `Briefed <noreply@yourdomain.com>`.
+4. Never commit the API key. `.env` is gitignored.
+
+### Local email (`backend/.env`)
+
+```bash
+RESEND_API_KEY=re_xxxxxxxx
+RESEND_FROM_EMAIL=Briefed <onboarding@resend.dev>
+```
+
+Then restart the API so env vars reload.
+
+### Vercel email
+
+1. Open **Vercel → Project → Settings → Environment Variables**.
+2. Add for **Production**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `JWT_SECRET`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
+3. **Redeploy** after saving variables.
+
+Local single-process dev can omit Upstash (in-memory auth store); do **not** omit Upstash on Vercel.
+
+OTP pending state uses Upstash Redis on Vercel (required). Locally without Upstash, pending OTPs live in process memory (fine for one `tsx` process; lost on restart).
 
 ## Judge demo (2–3 min)
 

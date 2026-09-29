@@ -17,11 +17,11 @@ function extractBearer(req: Request): string | null {
   return token.trim();
 }
 
-export function requireAuth(
+export async function requireAuth(
   req: Request,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   try {
     const token = extractBearer(req);
     if (!token) {
@@ -31,9 +31,8 @@ export function requireAuth(
       });
       return;
     }
-    const user = getUserFromToken(token);
+    const user = await getUserFromToken(token);
     (req as AuthedRequest).user = user;
-    // Keep ALS active for async route handlers started via next()
     runWithAuthUser(user, () => {
       next();
     });
@@ -46,15 +45,15 @@ export function requireAuth(
   }
 }
 
-export function optionalAuth(
+export async function optionalAuth(
   req: Request,
   _res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   try {
     const token = extractBearer(req);
     if (token) {
-      const user = getUserFromToken(token);
+      const user = await getUserFromToken(token);
       (req as AuthedRequest).user = user;
       runWithAuthUser(user, () => next());
       return;

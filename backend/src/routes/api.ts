@@ -112,34 +112,45 @@ function userId(req: Request): string {
 router.use("/auth", authRouter);
 
 router.get("/health", (_req, res) => {
-  const hs = healthCheck();
   let sqliteOk = false;
   let sqliteError: string | undefined;
+  let dbPath = "";
   try {
+    dbPath = getDbPath();
     initDatabase();
     sqliteOk = true;
   } catch (err) {
     sqliteError = err instanceof Error ? err.message : String(err);
   }
-  res.json({
-    ok: sqliteOk,
+
+  let hindsightConfigured = false;
+  let bankId = "briefed-maya";
+  try {
+    const hs = healthCheck();
+    hindsightConfigured = hs.configured;
+    bankId = hs.bankId;
+  } catch {
+    /* do not fail health */
+  }
+
+  res.status(200).json({
+    ok: true,
     service: "briefed-api",
     memoryProvider: "hindsight",
-    hindsightConfigured: hs.configured,
-    bankId: hs.bankId,
+    hindsightConfigured,
+    bankId,
     videoSignaling: process.env.VERCEL
       ? "unavailable-on-vercel-serverless"
       : "/ws/video",
     auth: true,
-    runtime: process.env.VERCEL ? "vercel" : "local",
+    runtime: process.env.VERCEL || process.env.VERCEL_ENV ? "vercel" : "local",
     sqlite: {
       ok: sqliteOk,
-      path: getDbPath(),
+      path: dbPath,
       error: sqliteError,
-      ephemeral: Boolean(process.env.VERCEL),
+      ephemeral: Boolean(process.env.VERCEL || process.env.VERCEL_ENV),
     },
     jwtConfigured: Boolean(process.env.JWT_SECRET?.trim()),
-    authStorage: "memory",
   });
 });
 

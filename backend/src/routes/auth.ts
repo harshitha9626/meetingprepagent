@@ -7,28 +7,17 @@ import { requireAuth } from "../middleware/auth.js";
 import {
   getUserFromToken,
   loginUser,
-  resendRegistrationOtp,
-  startRegistration,
-  verifyRegistrationOtp,
+  registerUser,
 } from "../services/authService.js";
-import { memoryAuthStats } from "../store/memoryAuthStore.js";
+import { authStorageMode } from "../store/authStore.js";
 
 const router = Router();
 
-const registerStartSchema = z.object({
+const registerSchema = z.object({
   name: z.string(),
   email: z.string(),
   password: z.string(),
   confirmPassword: z.string(),
-});
-
-const registerVerifySchema = z.object({
-  pendingId: z.string().min(1),
-  otp: z.string(),
-});
-
-const registerResendSchema = z.object({
-  pendingId: z.string().min(1),
 });
 
 const loginSchema = z.object({
@@ -36,28 +25,6 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
-router.post("/register/start", async (req, res) => {
-  try {
-    const parsed = registerStartSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: "Invalid registration data",
-        code: "VALIDATION",
-      });
-      return;
-    }
-    const result = await startRegistration(parsed.data);
-    res.status(200).json(result);
-  } catch (err) {
-    const e = err as Error & { status?: number; code?: string };
-    res.status(e.status ?? 500).json({
-      error: e.message || "Registration failed",
-      code: e.code || "REGISTER_FAILED",
-    });
-  }
-});
-
-/** Backward-compatible alias — starts OTP registration (does not create account yet). */
 router.post("/register", async (req, res) => {
   try {
     const body = {
@@ -66,7 +33,7 @@ router.post("/register", async (req, res) => {
       password: req.body?.password,
       confirmPassword: req.body?.confirmPassword ?? req.body?.password,
     };
-    const parsed = registerStartSchema.safeParse(body);
+    const parsed = registerSchema.safeParse(body);
     if (!parsed.success) {
       res.status(400).json({
         error: "Invalid registration data",
@@ -74,55 +41,13 @@ router.post("/register", async (req, res) => {
       });
       return;
     }
-    const result = await startRegistration(parsed.data);
-    res.status(200).json(result);
+    const result = await registerUser(parsed.data);
+    res.status(201).json(result);
   } catch (err) {
     const e = err as Error & { status?: number; code?: string };
     res.status(e.status ?? 500).json({
       error: e.message || "Registration failed",
       code: e.code || "REGISTER_FAILED",
-    });
-  }
-});
-
-router.post("/register/verify", async (req, res) => {
-  try {
-    const parsed = registerVerifySchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: "Invalid OTP",
-        code: "VALIDATION",
-      });
-      return;
-    }
-    const result = await verifyRegistrationOtp(parsed.data);
-    res.status(201).json(result);
-  } catch (err) {
-    const e = err as Error & { status?: number; code?: string };
-    res.status(e.status ?? 500).json({
-      error: e.message || "OTP verification failed",
-      code: e.code || "OTP_VERIFY_FAILED",
-    });
-  }
-});
-
-router.post("/register/resend", async (req, res) => {
-  try {
-    const parsed = registerResendSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: "Invalid request",
-        code: "VALIDATION",
-      });
-      return;
-    }
-    const result = await resendRegistrationOtp(parsed.data);
-    res.json(result);
-  } catch (err) {
-    const e = err as Error & { status?: number; code?: string };
-    res.status(e.status ?? 500).json({
-      error: e.message || "Could not resend OTP",
-      code: e.code || "OTP_RESEND_FAILED",
     });
   }
 });
@@ -153,11 +78,10 @@ router.post("/logout", requireAuth, (_req, res) => {
 });
 
 router.get("/me", requireAuth, (req, res) => {
-  const user = (req as AuthedRequest).user;
-  res.json({ user });
+  res.json({ user: (req as AuthedRequest).user });
 });
 
-router.get("/session", (req, res) => {
+router.get("/session", async (req, res) => {
   try {
     const header = req.headers.authorization;
     const token = header?.startsWith("Bearer ")
@@ -167,7 +91,7 @@ router.get("/session", (req, res) => {
       res.status(401).json({ error: "Not authenticated", code: "UNAUTHORIZED" });
       return;
     }
-    const user = getUserFromToken(token);
+    const user = await getUserFromToken(token);
     res.json({ user });
   } catch (err) {
     const e = err as Error & { status?: number; code?: string };
@@ -179,7 +103,7 @@ router.get("/session", (req, res) => {
 });
 
 router.get("/storage", (_req, res) => {
-  res.json({ auth: memoryAuthStats() });
+  res.json({ auth: { storage: authStorageMode() } });
 });
 
 export default router;

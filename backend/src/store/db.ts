@@ -3,6 +3,7 @@
  * Database facade.
  * - Vercel/serverless → JSON file under /tmp (no node:sqlite import)
  * - Local → SQLite via lazy createRequire (persistent backend/data)
+ * - Hard fallback to JSON if SQLite cannot load (prevents FUNCTION_INVOCATION_FAILED)
  */
 
 import { createRequire } from "node:module";
@@ -20,14 +21,24 @@ type StoreApi = typeof jsonStore;
 
 const require = createRequire(import.meta.url);
 let sqliteStore: StoreApi | null = null;
+let sqliteLoadFailed = false;
 
 function store(): StoreApi {
-  if (isServerlessRuntime()) {
+  if (isServerlessRuntime() || sqliteLoadFailed) {
     return jsonStore;
   }
   if (!sqliteStore) {
-    // Loaded only on local Node — keeps node:sqlite off the Vercel cold-start path.
-    sqliteStore = require("./sqliteDb.js") as StoreApi;
+    try {
+      // Loaded only on local Node — keeps node:sqlite off the Vercel cold-start path.
+      sqliteStore = require("./sqliteDb.js") as StoreApi;
+    } catch (err) {
+      sqliteLoadFailed = true;
+      console.error(
+        "[briefed] SQLite unavailable; using /tmp JSON store",
+        err instanceof Error ? err.message : "unknown error"
+      );
+      return jsonStore;
+    }
   }
   return sqliteStore;
 }
@@ -35,13 +46,17 @@ function store(): StoreApi {
 export function resolveDataDir(): string {
   const override = process.env.BRIEFED_DB_DIR?.trim();
   if (override) return override;
-  if (isServerlessRuntime()) return "/tmp/briefed-data";
+  if (isServerlessRuntime() || sqliteLoadFailed) return "/tmp/briefed-data";
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   return path.join(__dirname, "..", "..", "data");
 }
 
 export function getDbPath(): string {
-  return store().getDbPath();
+  try {
+    return store().getDbPath();
+  } catch {
+    return "/tmp/briefed-data/briefed-store.json";
+  }
 }
 
 export function initDatabase(): void {
