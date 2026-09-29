@@ -7,34 +7,47 @@ import { requireAuth } from "../middleware/auth.js";
 import {
   getUserFromToken,
   loginUser,
-  registerUser,
+  resendRegistrationOtp,
+  startRegistration,
+  verifyRegistrationOtp,
 } from "../services/authService.js";
+import { memoryAuthStats } from "../store/memoryAuthStore.js";
 
 const router = Router();
 
-const registerSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(120),
-  email: z.string().trim().email("Enter a valid email address").max(254),
-  password: z.string().min(8, "Password must be at least 8 characters").max(128),
+const registerStartSchema = z.object({
+  name: z.string(),
+  email: z.string(),
+  password: z.string(),
+  confirmPassword: z.string(),
+});
+
+const registerVerifySchema = z.object({
+  pendingId: z.string().min(1),
+  otp: z.string(),
+});
+
+const registerResendSchema = z.object({
+  pendingId: z.string().min(1),
 });
 
 const loginSchema = z.object({
-  email: z.string().trim().email("Enter a valid email address").max(254),
-  password: z.string().min(1, "Password is required").max(128),
+  email: z.string(),
+  password: z.string(),
 });
 
-router.post("/register", async (req, res) => {
+router.post("/register/start", async (req, res) => {
   try {
-    const parsed = registerSchema.safeParse(req.body);
+    const parsed = registerStartSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message || "Invalid registration data",
+        error: "Invalid registration data",
         code: "VALIDATION",
       });
       return;
     }
-    const result = await registerUser(parsed.data);
-    res.status(201).json(result);
+    const result = await startRegistration(parsed.data);
+    res.status(200).json(result);
   } catch (err) {
     const e = err as Error & { status?: number; code?: string };
     res.status(e.status ?? 500).json({
@@ -44,12 +57,82 @@ router.post("/register", async (req, res) => {
   }
 });
 
+/** Backward-compatible alias — starts OTP registration (does not create account yet). */
+router.post("/register", async (req, res) => {
+  try {
+    const body = {
+      name: req.body?.name,
+      email: req.body?.email,
+      password: req.body?.password,
+      confirmPassword: req.body?.confirmPassword ?? req.body?.password,
+    };
+    const parsed = registerStartSchema.safeParse(body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid registration data",
+        code: "VALIDATION",
+      });
+      return;
+    }
+    const result = await startRegistration(parsed.data);
+    res.status(200).json(result);
+  } catch (err) {
+    const e = err as Error & { status?: number; code?: string };
+    res.status(e.status ?? 500).json({
+      error: e.message || "Registration failed",
+      code: e.code || "REGISTER_FAILED",
+    });
+  }
+});
+
+router.post("/register/verify", async (req, res) => {
+  try {
+    const parsed = registerVerifySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid OTP",
+        code: "VALIDATION",
+      });
+      return;
+    }
+    const result = await verifyRegistrationOtp(parsed.data);
+    res.status(201).json(result);
+  } catch (err) {
+    const e = err as Error & { status?: number; code?: string };
+    res.status(e.status ?? 500).json({
+      error: e.message || "OTP verification failed",
+      code: e.code || "OTP_VERIFY_FAILED",
+    });
+  }
+});
+
+router.post("/register/resend", async (req, res) => {
+  try {
+    const parsed = registerResendSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid request",
+        code: "VALIDATION",
+      });
+      return;
+    }
+    const result = await resendRegistrationOtp(parsed.data);
+    res.json(result);
+  } catch (err) {
+    const e = err as Error & { status?: number; code?: string };
+    res.status(e.status ?? 500).json({
+      error: e.message || "Could not resend OTP",
+      code: e.code || "OTP_RESEND_FAILED",
+    });
+  }
+});
+
 router.post("/login", async (req, res) => {
   try {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message || "Invalid login data",
+        error: "Please enter your email and password",
         code: "VALIDATION",
       });
       return;
@@ -65,7 +148,6 @@ router.post("/login", async (req, res) => {
   }
 });
 
-/** Stateless JWT logout — client discards the token. */
 router.post("/logout", requireAuth, (_req, res) => {
   res.json({ ok: true, message: "Logged out." });
 });
@@ -75,7 +157,6 @@ router.get("/me", requireAuth, (req, res) => {
   res.json({ user });
 });
 
-/** Validate token without requiring middleware chaining elsewhere. */
 router.get("/session", (req, res) => {
   try {
     const header = req.headers.authorization;
@@ -95,6 +176,10 @@ router.get("/session", (req, res) => {
       code: e.code || "UNAUTHORIZED",
     });
   }
+});
+
+router.get("/storage", (_req, res) => {
+  res.json({ auth: memoryAuthStats() });
 });
 
 export default router;

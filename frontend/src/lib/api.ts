@@ -282,10 +282,36 @@ async function request<T>(
   return data as T;
 }
 
+export type RegisterStartResponse = {
+  pendingId: string;
+  email: string;
+  expiresInSeconds: number;
+  resendAvailableInSeconds: number;
+  demoOtp?: string;
+  message: string;
+};
+
 export const api = {
-  register: (body: { name: string; email: string; password: string }) =>
+  registerStart: (body: {
+    name: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+  }) =>
+    request<RegisterStartResponse>(
+      "/api/auth/register/start",
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: false }
+    ),
+  registerVerify: (body: { pendingId: string; otp: string }) =>
     request<{ user: AuthUser; token: string }>(
-      "/api/auth/register",
+      "/api/auth/register/verify",
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: false }
+    ),
+  registerResend: (body: { pendingId: string }) =>
+    request<RegisterStartResponse>(
+      "/api/auth/register/resend",
       { method: "POST", body: JSON.stringify(body) },
       { auth: false }
     ),

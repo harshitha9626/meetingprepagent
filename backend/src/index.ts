@@ -34,7 +34,12 @@ app.use(express.json({ limit: "1mb" }));
 
 /** Ensure DB is ready before API handlers (lazy-safe on cold start). */
 app.use((req, res, next) => {
-  if (req.path === "/" && req.method === "GET") {
+  // Auth is in-memory — do not block login/register on SQLite/JSON store.
+  if (
+    req.path === "/" ||
+    req.path.startsWith("/api/auth") ||
+    req.path.startsWith("/auth")
+  ) {
     next();
     return;
   }
@@ -45,7 +50,7 @@ app.use((req, res, next) => {
     console.error("[briefed] database init failed", err);
     res.status(500).json({
       error:
-        "Database could not be initialized. On Vercel, SQLite uses /tmp (ephemeral).",
+        "Database could not be initialized. On Vercel, app data uses /tmp (ephemeral).",
       code: "DB_INIT_FAILED",
       detail: err instanceof Error ? err.message : String(err),
       dbPath: getDbPath(),

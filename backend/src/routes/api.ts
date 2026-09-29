@@ -139,6 +139,7 @@ router.get("/health", (_req, res) => {
       ephemeral: Boolean(process.env.VERCEL),
     },
     jwtConfigured: Boolean(process.env.JWT_SECRET?.trim()),
+    authStorage: "memory",
   });
 });
 
